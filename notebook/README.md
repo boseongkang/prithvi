@@ -27,8 +27,12 @@ Each row shows one 128×128 patch from the test set containing a fault. Columns 
 - After lowering threshold to **0.35**, IoU_fault improves from 0.066 to **0.385** on the full test set, indicating the model predicts fault regions with moderate but consistent probability.
 
 
-
+DEM_buffer1m update
 ## Objective 1B — DEM-based Fault Detection
+<img width="1388" height="490" alt="Image" src="https://github.com/user-attachments/assets/312dcb4f-4432-40f0-8642-4e1649ac32fa" />
+
+<img width="1559" height="2357" alt="Image" src="https://github.com/user-attachments/assets/c6c84978-e1eb-4689-b9c8-a1aae1caaed8" />
+
 
 ### DEM_Unet.ipynb (buffer=10m)
 - IoU_fault: 0.385, F1: 0.556
