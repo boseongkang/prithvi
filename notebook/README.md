@@ -25,3 +25,21 @@ Each row shows one 128×128 patch from the test set containing a fault. Columns 
 - Rows 3–4: The model correctly identifies the fault zone direction and location.
 - Rows 1–2, 5–6: Fault signal is weaker; model confidence stays below threshold=0.50.
 - After lowering threshold to **0.35**, IoU_fault improves from 0.066 to **0.385** on the full test set, indicating the model predicts fault regions with moderate but consistent probability.
+
+
+
+## Objective 1B — DEM-based Fault Detection
+
+### DEM_Unet.ipynb (buffer=10m)
+- IoU_fault: 0.385, F1: 0.556
+
+### DEM_buffer1m.ipynb (buffer=1m + Boundary Loss)
+- IoU_fault: 0.091 (strict), 0.118 (5m tolerance)
+- [training curve image]
+- [test predictions image]
+
+## Objective 1A — Prithvi + HLS
+
+### obj1A_256x256.ipynb
+- Patch size: 256×256
+- IoU_fault: 0.080 (val, threshold=0.50)
