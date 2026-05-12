@@ -4,6 +4,10 @@ Automated detection of active fault zones in California using high-resolution Li
 
 🌐 **Live Dashboard:** [prithvi-app-88345939641.us-west2.run.app](https://prithvi-app-88345939641.us-west2.run.app)
 
+<img src="https://github.com/user-attachments/assets/38d510b6-751a-41a1-941e-ead682fef571" alt="Owens Valley Predictions" width="800"/>
+
+*SegFormer-B2 predictions on Owens Valley test set. Columns: Hillshade input → Ground Truth → Predicted probability → Overlay. Best test IoU: 0.486.*
+
 ---
 
 ## Table of Contents
@@ -56,12 +60,6 @@ The core idea is that active faults leave physical scars on the landscape — vi
 
 **Key finding:** Owens Valley achieved IoU 0.486, a **+31.7% improvement** over the Carrizo baseline.
 
-### Prediction Visualization — Owens Valley
-
-<img src="https://github.com/user-attachments/assets/38d510b6-751a-41a1-941e-ead682fef571" alt="Owens Valley Predictions" width="800"/>
-
-*Each row shows one test patch from the Owens Valley region. Columns: Hillshade input → Ground Truth → Prediction probability → Overlay. The model correctly traces fault scarps across diverse geometries (rows #2, #9, #15) and identifies multiple parallel fault traces (rows #13, #14, #17), confirming it learned actual fault patterns rather than generic topographic features.*
-
 ### Failed Approaches (Important Negative Results)
 
 | Approach | IoU | Why it Failed |
@@ -81,8 +79,8 @@ The core idea is that active faults leave physical scars on the landscape — vi
 
 ```
 Python >= 3.10
-CUDA-capable GPU (training was run on DGX Spark GB10, 130GB VRAM)
-Google Drive (for checkpoint and patch storage)
+CUDA-capable GPU (recommended: 16GB+ VRAM for SegFormer-B2 training)
+Cloud storage for patches and checkpoints (~10GB per experiment)
 QGIS >= 3.x (for fault mask generation — one-time preprocessing only)
 ```
 
@@ -121,7 +119,7 @@ Key packages:
    ├─ 70/15/15 train/val/test split
    └─ Output: train.npz / val.npz / test.npz
         ↓
-4. Per-Region Training (DGX)
+4. Per-Region Training (GPU)
    ├─ SegFormer-B2 from nvidia/mit-b2 (ADE20K pretrained)
    ├─ Weighted CE + Dice loss (fault_weight=5.0)
    ├─ WeightedRandomSampler (50x fault oversampling)
@@ -142,7 +140,7 @@ Key packages:
 
 ```
 prithvi/
-├── dgx/                                 # DGX training scripts
+├── dgx/                                 # GPU training scripts
 │   ├── segformer_train.py               # B2 single-region (Carrizo baseline)
 │   ├── segformer_b5_train.py            # B5 enhanced (experimental)
 │   ├── segformer_b2_per_region.py       # B2 per-region (final, best results)
@@ -162,21 +160,38 @@ prithvi/
 
 ## 6. System Design
 
-**Compute:**
-- **DGX Spark (GB10 GPU, 130GB VRAM):** Multi-hour training jobs, all per-region models trained here
-- **Mac Mini M2 Pro:** Local QGIS preprocessing, patch extraction
-- **Google Colab (A100/L4):** Notebook prototyping, U-Net baseline
+**Three-tier architecture:**
 
-**Data Storage:**
-- **Google Drive (`prithvi_fault/`):** NPZ patches, model checkpoints — accessible from both Mac and DGX via rclone
-- **Google Cloud Storage (`cs163class.appspot.com`):** Public results CSV + dashboard images
+```
+┌─────────────────────────────────────────────┐
+│  Local Workstation (Preprocessing)          │
+│  • QGIS: fault mask generation              │
+│  • Python: patch extraction                 │
+│  • Output: .npz files                       │
+└─────────────────┬───────────────────────────┘
+                  │ upload (cloud sync)
+                  ↓
+┌─────────────────────────────────────────────┐
+│  GPU Compute (Training)                     │
+│  • SegFormer-B2 fine-tuning                 │
+│  • Per-region specialist models             │
+│  • Output: model checkpoints + metrics      │
+└─────────────────┬───────────────────────────┘
+                  │ upload (cloud sync)
+                  ↓
+┌─────────────────────────────────────────────┐
+│  Cloud Inference (Dashboard)                │
+│  • Google Cloud Run (stateless containers)  │
+│  • Google Cloud Storage (results CSV)       │
+│  • Public Dash app for visualization        │
+└─────────────────────────────────────────────┘
+```
 
-**Training Workflow:**
-```
-[Mac]   QGIS preprocessing → patch extraction → upload to Drive
-[DGX]   rclone download from Drive → train → upload checkpoints
-[Mac]   rclone download results → analysis → push to GitHub
-```
+**Design principles:**
+- **Separation of concerns:** Each tier handles one role (data prep / training / serving)
+- **Stateless inference:** Cloud Run scales horizontally, results loaded from GCS at runtime
+- **Reproducibility:** All preprocessing scripts version-controlled, training configs in code
+- **Portability:** Cloud-agnostic data formats (NPZ, JSON, CSV); training script runs on any CUDA GPU
 
 ---
 
