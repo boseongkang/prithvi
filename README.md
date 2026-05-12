@@ -277,5 +277,5 @@ https://www.usgs.gov/programs/earthquake-hazards/faults
 ```
 
 ## License
+#   MIT License — see [LICENSE](LICENSE) for details.
 
-CC BY 4.0
