@@ -1,0 +1,32 @@
+# Data and large artifacts (never commit)
+data/
+runs/
+*.pt
+*.pth
+*.tif
+*.tiff
+*.npy
+*.npz
+
+# GIS source files
+GDB/
+SHP/
+Symbology/
+*.zip
+Qfaults_GIS.zip
+
+# Logs
+*.log
+
+# Python environment
+fault_env/
+venv/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.ipynb_checkpoints/
+.vscode/
+
