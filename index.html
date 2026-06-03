@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finding Active Faults in LiDAR Terrain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#faf8f3;
+    --surface2:#f3f0e8;
+    --line:#e7e3d8;
+    --ink:#1c1a15;
+    --body:#37342b;
+    --muted:#6e6a5e;
+    --faint:#9a9485;
+    --ochre:#b76a2b;
+    --ochre-soft:#9f5f2e;
+    --cyan:#2f8a83;
+    --red:#a8442b;
+    --shadow:0 8px 26px rgba(40,33,20,.06);
+    --maxw:1080px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--body);
+    font-family:"IBM Plex Sans",sans-serif;
+    font-size:17px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{background:#f1e3cf}
+  a{color:var(--ochre-soft);text-decoration:none}
+  a:hover{color:var(--ochre)}
+
+  /* layout */
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 28px}
+  section{padding:84px 0;border-top:1px solid var(--line)}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;
+    font-size:12px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--ochre);margin-bottom:18px;
+  }
+  h2{
+    font-family:"Fraunces",serif;font-weight:600;
+    font-size:clamp(28px,4vw,42px);line-height:1.08;
+    letter-spacing:-.01em;margin-bottom:22px;color:var(--ink);
+  }
+  h3{font-family:"Fraunces",serif;font-weight:600;font-size:22px;letter-spacing:-.01em;color:var(--ink)}
+  p{color:var(--body);max-width:62ch}
+  .lead{font-size:19px;color:var(--ink)}
+
+  /* nav */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.85);backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  nav .wrap{display:flex;align-items:center;justify-content:center;height:60px}
+  .brand{font-family:"IBM Plex Mono",monospace;font-size:13px;letter-spacing:.12em;color:var(--ink)}
+  .brand b{color:var(--ochre)}
+  .navlinks{display:flex;gap:26px;font-size:14px}
+  .navlinks a{color:var(--muted);font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.04em}
+  .navlinks a:hover{color:var(--ink)}
+  @media(max-width:720px){.navlinks{display:none}}
+
+  /* hero */
+  .hero{position:relative;padding:104px 0 88px;border-top:none}
+  .hero h1{
+    font-family:"Fraunces",serif;font-weight:600;
+    font-size:clamp(46px,8.5vw,96px);line-height:.98;letter-spacing:-.02em;
+    max-width:16ch;margin-bottom:26px;color:var(--ink);
+  }
+  .hero h1 .em{font-style:normal;color:var(--ochre)}
+  .hero .lead{max-width:54ch;color:#4a4639;font-size:clamp(17px,2.2vw,21px)}
+  .meta{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:38px;
+    font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);letter-spacing:.04em}
+  .meta span{display:inline-flex;align-items:center;gap:8px}
+  .meta i{width:6px;height:6px;border-radius:50%;background:var(--ochre);display:inline-block;font-style:normal}
+
+  /* reveal */
+  .reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  /* pipeline steps */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:14px}
+  .step{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:26px 24px;position:relative}
+  .step .n{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ochre);letter-spacing:.1em}
+  .step h3{margin:12px 0 10px;font-size:19px}
+  .step p{font-size:15px;color:var(--muted);max-width:none}
+  @media(max-width:760px){.steps{grid-template-columns:1fr}}
+
+  /* results table */
+  .tablecard{background:var(--bg);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse;font-size:15px}
+  thead th{
+    text-align:left;font-family:"IBM Plex Mono",monospace;font-weight:500;
+    font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+    padding:16px 18px;border-bottom:1px solid var(--line);background:var(--surface2);
+  }
+  tbody td{padding:16px 18px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:last-child td{border-bottom:none}
+  .rgn{font-family:"Fraunces",serif;font-size:18px;color:var(--ink)}
+  .rgn small{display:block;font-family:"IBM Plex Sans";font-size:13px;color:var(--muted);font-weight:400}
+  .tag{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.04em;
+    color:var(--ochre-soft);border:1px solid var(--line);border-radius:999px;padding:3px 10px;white-space:nowrap}
+  .num{font-family:"IBM Plex Mono",monospace;font-size:15px;color:var(--ink)}
+  .iou{display:flex;align-items:center;gap:10px;min-width:120px}
+  .bar{flex:1;height:6px;background:#ece8df;border-radius:4px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#d98a3d,#c89a5f);border-radius:4px}
+  .tnote{font-size:13px;color:var(--muted);margin-top:14px;font-family:"IBM Plex Mono",monospace;letter-spacing:.02em}
+  @media(max-width:680px){
+    .hide-sm{display:none}
+    tbody td,thead th{padding:13px 12px}
+  }
+
+  /* region cards */
+  .regions{display:grid;gap:22px;margin-top:10px}
+  .rcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
+  .rcard .head{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:22px 24px 14px;flex-wrap:wrap}
+  .rcard .head h3{font-size:21px}
+  .rcard .head .loc{font-size:14px;color:var(--muted)}
+  .rcard .imgs{display:grid;grid-template-columns:1fr 1fr;gap:2px;background:var(--line)}
+  .rcard figure{margin:0;background:#f0ede5;position:relative;min-height:200px}
+  .rcard img{display:block;width:100%;height:100%;object-fit:cover;aspect-ratio:4/3}
+  .rcard figcaption{
+    position:absolute;left:12px;bottom:10px;
+    font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+    background:rgba(20,18,13,.72);color:#fff;padding:4px 9px;border-radius:6px}
+  .rcard .foot{display:flex;align-items:center;gap:18px;padding:16px 24px;font-size:14px;color:var(--muted);flex-wrap:wrap}
+  .legend{display:inline-flex;align-items:center;gap:7px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.03em}
+  .swatch{width:18px;height:3px;border-radius:2px;display:inline-block}
+  @media(max-width:560px){.rcard .imgs{grid-template-columns:1fr}}
+
+  /* findings */
+  .finds{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px;counter-reset:f}
+  .find{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:24px;counter-increment:f}
+  .find::before{content:"0" counter(f);font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--ochre);letter-spacing:.1em}
+  .find h3{font-size:18px;margin:8px 0 8px}
+  .find p{font-size:14.5px;color:var(--muted);max-width:none}
+  .find .data{font-family:"IBM Plex Mono",monospace;color:var(--cyan);font-size:13px}
+  @media(max-width:720px){.finds{grid-template-columns:1fr}}
+
+  /* next */
+  .next{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:10px}
+  .ncard{padding:22px;border:1px dashed var(--line);border-radius:14px}
+  .ncard h3{font-size:17px;margin-bottom:8px}
+  .ncard p{font-size:14px;color:var(--muted);max-width:none}
+  @media(max-width:760px){.next{grid-template-columns:1fr}}
+
+  footer{border-top:1px solid var(--line);padding:46px 0 70px;color:var(--faint)}
+  footer .wrap{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;font-size:13.5px;font-family:"IBM Plex Mono",monospace;letter-spacing:.03em}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="navlinks">
+      <a href="#overview">Overview</a>
+      <a href="#pipeline">Pipeline</a>
+      <a href="#results">Results</a>
+      <a href="#regions">Regions</a>
+      <a href="#findings">Findings</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Active tectonics · Deep learning · LiDAR</div>
+    <h1>Finding active faults in LiDAR terrain</h1>
+    <p class="lead">A deep learning project that uses LiDAR to find active faults in the landscape. In each image the fault is only a tiny fraction of the pixels, a thin trace among millions of background points, which is what makes it hard to find.</p>
+  </div>
+</header>
+
+<main>
+
+  <section id="overview">
+    <div class="wrap reveal">
+      <div class="eyebrow">Overview</div>
+      <h2>Reading the shape of the ground</h2>
+      <p class="lead">When a fault moves over thousands of years it leaves subtle marks on the landscape: scarps, offset stream channels, and aligned notches along ridges. Bare earth LiDAR strips away the vegetation and reveals these landforms in fine detail.</p>
+      <p style="margin-top:18px">This project trains a model to recognize those landforms automatically. The model reads images made from LiDAR elevation, mainly a shaded relief view and a slope map, and labels every pixel as fault or not fault. It learns purely by example from the faults already mapped in the USGS Quaternary Fault and Fold Database. The goal is a first pass map of likely active faults across large areas, far faster than a geologist can review by hand. Because a fault is only a thin line, it covers a very small share of the pixels in any image, so the real challenge is finding that rare signal without mislabeling ordinary ground.</p>
+    </div>
+  </section>
+
+  <section id="pipeline">
+    <div class="wrap reveal">
+      <div class="eyebrow">Pipeline</div>
+      <h2>From raw LiDAR to a trained model</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="n">01 / SELECT</div>
+          <h3>Choose areas by fault density</h3>
+          <p>A program scans the whole <a href="https://portal.opentopography.org/datasets" target="_blank" rel="noopener">EarthScope Southern and Eastern California LiDAR</a> coverage block by block, measures how much mapped fault length sits inside each block, and keeps the densest. This replaces choosing study areas by hand.</p>
+        </div>
+        <div class="step">
+          <div class="n">02 / TRAIN</div>
+          <h3>Learn from mapped faults</h3>
+          <p>For each area, a separate model learns from shaded relief and slope, in tiles a few hundred meters across, using the USGS mapped faults as examples. Each model is then tested on parts of its area it never saw during training.</p>
+        </div>
+        <div class="step">
+          <div class="n">03 / CHECK</div>
+          <h3>Score against the database</h3>
+          <p>Predictions are compared to the USGS faults. Because mapped fault lines are themselves only approximate, exact pixel overlap is a harsh measure, so scoring with a distance tolerance is the next step.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="results">
+    <div class="wrap reveal">
+      <div class="eyebrow">Results</div>
+      <h2>Accuracy follows the terrain</h2>
+      <p style="margin-bottom:30px">Each area was scored on a test set the model never saw. On a zero to one overlap scale the scores were modest, and they tracked how strongly faulting has shaped the topography rather than anything about the model.</p>
+      <div class="tablecard">
+        <table>
+          <thead>
+            <tr>
+              <th>Study area</th>
+              <th class="hide-sm">Slip style</th>
+              <th>Test IoU</th>
+              <th class="hide-sm">Recall</th>
+              <th class="hide-sm">Precision</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="rgn">Owens Valley<small>Big Pine</small></span></td>
+              <td class="hide-sm"><span class="tag">right lateral</span></td>
+              <td><div class="iou"><span class="num">0.29</span><span class="bar"><i style="width:97%"></i></span></div></td>
+              <td class="hide-sm num">0.44</td>
+              <td class="hide-sm num">0.47</td>
+            </tr>
+            <tr>
+              <td><span class="rgn">Panamint Valley<small>Panamint Range front</small></span></td>
+              <td class="hide-sm"><span class="tag">normal</span></td>
+              <td><div class="iou"><span class="num">0.16</span><span class="bar"><i style="width:53%"></i></span></div></td>
+              <td class="hide-sm num">0.36</td>
+              <td class="hide-sm num">0.22</td>
+            </tr>
+            <tr>
+              <td><span class="rgn">Quail Mountains<small>near Death Valley</small></span></td>
+              <td class="hide-sm"><span class="tag">left and right lateral</span></td>
+              <td><div class="iou"><span class="num">0.09</span><span class="bar"><i style="width:29%"></i></span></div></td>
+              <td class="hide-sm num">0.14</td>
+              <td class="hide-sm num">0.17</td>
+            </tr>
+            <tr>
+              <td><span class="rgn">Cantil<small>near the Sierra Nevada</small></span></td>
+              <td class="hide-sm"><span class="tag">left lateral</span></td>
+              <td><div class="iou"><span class="num">0.07</span><span class="bar"><i style="width:24%"></i></span></div></td>
+              <td class="hide-sm num">0.10</td>
+              <td class="hide-sm num">0.24</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tnote">Bars scaled to the strongest area. These are strict overlap scores, which understate a thin line prediction that is only slightly offset.</p>
+    </div>
+  </section>
+
+  <section id="regions">
+    <div class="wrap reveal">
+      <div class="eyebrow">Regions</div>
+      <h2>What the model sees, side by side</h2>
+      <p style="margin-bottom:8px">For each area, the left panel is the setting and the right panel shows the model prediction over the shaded relief.</p>
+      <div class="regions">
+
+        <article class="rcard">
+          <div class="head"><h3>Owens Valley</h3><span class="loc">Big Pine · strongest result</span></div>
+          <div class="imgs">
+            <figure><img src="assets/region_bigpine.png" alt="Owens Valley study area" loading="lazy"><figcaption>Setting</figcaption></figure>
+            <figure><img src="assets/pred_bigpine.png" alt="Owens Valley prediction over hillshade" loading="lazy"><figcaption>Prediction</figcaption></figure>
+          </div>
+          <div class="foot">
+            <span class="legend"><span class="swatch" style="background:var(--red)"></span>USGS faults</span>
+            <span class="legend"><span class="swatch" style="background:var(--cyan)"></span>Model prediction</span>
+            <span style="margin-left:auto" class="num">IoU 0.29</span>
+          </div>
+        </article>
+
+        <article class="rcard">
+          <div class="head"><h3>Panamint Valley</h3><span class="loc">steep range front, over predicts</span></div>
+          <div class="imgs">
+            <figure><img src="assets/region_panamint.png" alt="Panamint Valley study area" loading="lazy"><figcaption>Setting</figcaption></figure>
+            <figure><img src="assets/pred_panamint.png" alt="Panamint Valley prediction over hillshade" loading="lazy"><figcaption>Prediction</figcaption></figure>
+          </div>
+          <div class="foot">
+            <span class="legend"><span class="swatch" style="background:var(--red)"></span>USGS faults</span>
+            <span class="legend"><span class="swatch" style="background:var(--cyan)"></span>Model prediction</span>
+            <span style="margin-left:auto" class="num">IoU 0.16</span>
+          </div>
+        </article>
+
+        <article class="rcard">
+          <div class="head"><h3>Quail Mountains</h3><span class="loc">near Death Valley</span></div>
+          <div class="imgs">
+            <figure><img src="assets/region_death_valley.png" alt="Quail Mountains study area" loading="lazy"><figcaption>Setting</figcaption></figure>
+            <figure><img src="assets/pred_death_valley.png" alt="Quail Mountains prediction over hillshade" loading="lazy"><figcaption>Prediction</figcaption></figure>
+          </div>
+          <div class="foot">
+            <span class="legend"><span class="swatch" style="background:var(--red)"></span>USGS faults</span>
+            <span class="legend"><span class="swatch" style="background:var(--cyan)"></span>Model prediction</span>
+            <span style="margin-left:auto" class="num">IoU 0.09</span>
+          </div>
+        </article>
+
+        <article class="rcard">
+          <div class="head"><h3>Cantil</h3><span class="loc">near the Sierra Nevada</span></div>
+          <div class="imgs">
+            <figure><img src="assets/region_sierra_nevada.png" alt="Cantil study area" loading="lazy"><figcaption>Setting</figcaption></figure>
+            <figure><img src="assets/pred_sierra_nevada.png" alt="Cantil prediction over hillshade" loading="lazy"><figcaption>Prediction</figcaption></figure>
+          </div>
+          <div class="foot">
+            <span class="legend"><span class="swatch" style="background:var(--red)"></span>USGS faults</span>
+            <span class="legend"><span class="swatch" style="background:var(--cyan)"></span>Model prediction</span>
+            <span style="margin-left:auto" class="num">IoU 0.07</span>
+          </div>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <section id="findings">
+    <div class="wrap reveal">
+      <div class="eyebrow">Findings</div>
+      <h2>Five things the data showed</h2>
+      <div class="finds">
+        <div class="find">
+          <h3>Terrain decides, not the model</h3>
+          <p>The same model scored <span class="data">0.29</span> in Owens Valley and <span class="data">0.07</span> at Cantil. Detection follows how clearly faulting has marked the land, and recall follows with it.</p>
+        </div>
+        <div class="find">
+          <h3>More input layers did not help</h3>
+          <p>Five terrain channels scored about the same as two on Panamint (<span class="data">0.16</span> versus <span class="data">0.14</span>). The limit is the landscape, not the inputs.</p>
+        </div>
+        <div class="find">
+          <h3>Very steep ground backfires</h3>
+          <p>The steepest area over predicts, marking ordinary slope lines as faults, so its precision was only <span class="data">0.22</span>.</p>
+        </div>
+        <div class="find">
+          <h3>Validation is optimistic</h3>
+          <p>Held back test ground scored well below validation. The Quail Mountains fell from a validation <span class="data">0.23</span> to a test <span class="data">0.09</span>.</p>
+        </div>
+        <div class="find" style="grid-column:1 / -1">
+          <h3>Data preparation mattered more than the model</h3>
+          <p>Fixing a missing data error in how the slope image was built, on its own, raised the Owens Valley test score from <span class="data">0.08</span> to <span class="data">0.29</span>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Research in progress · numbers will change as the pipeline improves</span>
+    <span><a href="https://github.com/boseongkang/prithvi" target="_blank" rel="noopener">github.com/boseongkang/prithvi</a></span>
+  </div>
+</footer>
+
+<script>
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+  },{threshold:0.12});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>
